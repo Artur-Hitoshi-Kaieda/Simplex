@@ -8,7 +8,7 @@
 /*gcc Simplex.c -o simplex -lgsl -lm */
 
 
-double* ResolveSistemaLU(double **A, double *x) {
+double* ResolveSistemaLU(double **A, double *b) {
 
 }
 
@@ -63,18 +63,57 @@ double* Fase1(double** A, double *b, int m, int n) {
     
 }
 
+double *Alocar_vetor(int n) {
+    double *v = (double*)malloc(n, sizeof(double));
+    return(v);
+}
 
 double **Alocar_Matriz(int m, int n) {
     double **A = (double**)malloc(m, sizeof(double*));
     for(int i = 0; i < n; i++) {
         A[i] = (double*)malloc(n, sizeof(double));
     }
+    return(A);
+}
+
+void Libera_Matriz(double*** A, int m) {
+    if((*A) != NULL) {
+        for(int i = 0; i < m; i++) {
+            free((*A)[i]);
+        }
+        free(*A);
+        (*A) = NULL;
+    }
+}
+
+double **Transpoe_Matriz(double **A, int m, int n){
+    double **A_t = Alocar_Matriz(n,m);
+    for(int i = 0; i < n; i++) {
+        for(int j = 0; j < m; j++) {
+            A_t[i][j] = A[j][i];
+        }
+    }
+    return(A_t);
 }
 
 
 double* Simplex(double **A, double *c, double *b, int m, int n) {
-    double **B;
+    double **B; double* x_b, a_0, c_b, y;
+    x_b = Alocar_vetor(m);
+    a_0 = Alocar_vetor(m);
+    c_b = Alocar_vetor(m);
+    y = Alocar_vetor(m);
+    B = Alocar_Matriz(m,m);
     int *indices_b = Fase1(A, b, m, n);
+
+    a_0 = ResolveSistemaLU(B, b);
+    x_b = a_0;
+    for(int i = 0; i < m; i++) {
+        c_b[i] = c[indices_b[i]];
+    }
+    
+    y = ResolveSistemaLU(B_t, c_b);
+
     
 }
 
@@ -94,15 +133,15 @@ int main() {
 
 
 
-    
-
-
-
-
-
-
-
-
 
     
 
+
+
+
+
+
+
+
+
+    
