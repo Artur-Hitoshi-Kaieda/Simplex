@@ -63,7 +63,19 @@ double* Fase1(double** A, double *b, int m, int n) {
     
 }
 
-double* Simplex() {
+
+double **Alocar_Matriz(int m, int n) {
+    double **A = (double**)malloc(m, sizeof(double*));
+    for(int i = 0; i < n; i++) {
+        A[i] = (double*)malloc(n, sizeof(double));
+    }
+}
+
+
+double* Simplex(double **A, double *c, double *b, int m, int n) {
+    double **B;
+    int *indices_b = Fase1(A, b, m, n);
+    
 }
 
 
@@ -93,3 +105,4 @@ int main() {
 
 
     
+
