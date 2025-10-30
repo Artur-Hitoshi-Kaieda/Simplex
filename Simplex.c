@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
+#include <string.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_vector.h>
@@ -58,6 +59,24 @@ double* ResolveSistemaLU(double **A, double *b, int n) {
 
 }
 
+void Imprime_vetor(double *v, int n, const char *msg) {
+    printf("%s\n", msg);
+    for(int i = 0; i < n; i++)
+        printf("%lf", v[i]);
+    
+    printf("\n");
+}
+
+void Imprime_matriz(double **A, int m, int n, const char *msg) {
+    printf("%s\n", msg);
+    for(int i = 0; i < m; i++) {
+        for(int j = 0; j < n; j++) {
+            printf("%8.3lf", A[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
 
 int indice_minimo(double *x, int n) {
     double p = DBL_MAX; int min;
@@ -205,7 +224,7 @@ Base* Atualiza_Base(Base * Bs, int e, int o, int m, int n) {
 Base* Simplex(ProgramaLinear* PL, Base *Bs) { 
 
     int m = PL->m; int n = PL->n; int bool = -1;
-    double *a_0 = Aloca_vetor(m); double *y = Aloca_vetor(m); double*r_N = Aloca_vetor(n - m); double *a_e = Aloca_vetor(m); double *as_e = Aloca_vetor(m);
+    double *a_0 = Aloca_vetor(m); double *y = Aloca_vetor(m); double*r_N = Aloca_vetor(n - m); double *A_e = Aloca_vetor(m); double *a_e = Aloca_vetor(m);
     double **B = Aloca_Matriz(m, m);
 
     while(bool != 1) { // Loop ate encontrar solucao otima ou ilimitada
@@ -216,16 +235,21 @@ Base* Simplex(ProgramaLinear* PL, Base *Bs) {
             }
         }
 
+        Imprime_matriz(B, m, m, "Matriz B:");
+
         double **B_t = Transpoe_Matriz(B, m, m);
         double *c_b = Aloca_vetor(m);
 
         for(int i = 0; i < m; i++) {
             c_b[i] = PL->c[Bs->ind_b[i]]; // Determina vetor de custos basicos c_b
         }
+        Imprime_vetor(c_b, m, "Vetor custos basicos:");
 
         a_0 = ResolveSistemaLU(B, PL->b, m); // Resolve B * a_0 = b (determina o valor das variaveis basicas iniciais)
+        Imprime_vetor(a_0, m, "Variaveis basicas iniciais a0: ");
 
         y = ResolveSistemaLU(B_t, c_b, m); // Resolve B^T * y = c_b (determina os multiplicadores simplex)
+        Imprime_vetor(y, m, "Multiplicadores Simplex: ");
 
         for(int k = 0; k < (n - m); k++) { 
             double s = 0;
@@ -235,31 +259,39 @@ Base* Simplex(ProgramaLinear* PL, Base *Bs) {
             r_N[k] = PL->c[Bs->ind_nb[k]] - s; // Calcula custos reduzidos r_N = c_N - N^T * y
 
         }
+        Imprime_vetor(r_N, (n - m), "Custos reduzidos rn:");
 
         int e_idx = indice_minimo(r_N, (n - m)); // Encontra indice da a sair da base
-        int e = Bs->ind_nb[e_idx];
+        printf("Indice sair: %d", e_idx);
+        /*int e = Bs->ind_b[e_idx];*/
 
-
-        if(r_N[e] >= 0) {
-            printf("Solucao otima"); // Se todos os custos reduzidos forem nao-negativos, solucao otima foi encontrada
+        if(r_N[e_idx] >= 0) {
+            Imprime_vetor(a_0, m, "Solucao otima encontrada: "); // Se todos os custos reduzidos forem nao-negativos, solucao otima foi encontrada
             bool = 1;
         }
 
         for(int i = 0; i < m; i++) {
-            a_e[i] = PL->A[i][e]; // Define coluna a_e a entrar na base
+            A_e[i] = PL->A[i][e_idx]; // Define coluna A_e a entrar na base
         }
+        Imprime_vetor(A_e, m, "Coluna a entrar na base: " );
 
-        as_e = ResolveSistemaLU(B, a_e, m);
+        a_e = ResolveSistemaLU(B, A_e, m);
+        Imprime_vetor(a_e, m, "Combinacao linear das colunas de B que formam coluna A_e");
 
-        int o_idx = indice_minimo_proporcao(a_0, as_e, m); // Encontra indice da variavel a sair da base
-        int o = Bs->ind_b[o_idx];
+        int o_idx = indice_minimo_proporcao(a_0, a_e, m); // Encontra indice da variavel a sair da base
+        printf("indice a sair da base: %d", o_idx);
+        /*int o = Bs->ind_b[o_idx]; */
 
-        if(o == -1) {
+        if(o_idx == -1) {
             printf("Solucao Ilimitada");
             bool = 1;
         }
    
-        Bs = Atualiza_Base(Bs, e, o, m, n);
+        Bs = Atualiza_Base(Bs, e_idx, o_idx, m, n);
+        printf("Indices basicos encontrados:");
+        for(int i = 0; i < m; i++){ 
+            printf("%d", (Bs->ind_b)[i]);
+        }
         Libera_vetor(&a_0);
         Libera_Matriz(&B_t, m);
 
@@ -275,6 +307,8 @@ Base *Fase1(ProgramaLinear *pl) {
     Base *Bs_fase1 = Aloca_Base(m, (n + m));
     
     ProgramaLinear *pl_fase1 = Aloca_PL(m, (n + m));
+
+    printf("Inicia fase 1:");
 
    for(int i = 0; i < m; i++) {
        Bs_fase1->ind_b[i] = i;
@@ -304,6 +338,8 @@ Base *Fase1(ProgramaLinear *pl) {
     for(int i = 0; i < pl->n; i++) {
         pl_fase1->c[i] = -1; 
     }
+
+    Base *Base_Simplex = Aloca_Base(m, n);
     Base_Simplex = Simplex(pl_fase1, Bs_fase1);
     
     Libera_Base(&Bs_fase1);
@@ -354,6 +390,9 @@ int main() {
     }
 
     printf("Base viavel encontrada pela Fase I:\n");
+    printf("Indices basicos:\n");
+    for(int i = 0; i < m; i++)
+        printf("%d ", B->ind_b[i]);
 
     pl->m = m; pl->n = n; pl->c = c; pl->b = b; pl->c = c; pl->A = A;
 
@@ -365,6 +404,7 @@ int main() {
         printf("indices basicos: %d\n", B->ind_b[i]);
 
     return(1);
+    
 
 }
 
