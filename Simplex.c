@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <float.h>
 #include <string.h>
+#include <stdbool.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_vector.h>
@@ -229,15 +230,16 @@ Base* Atualiza_Base(Base * Bs, int e, int o, int m, int n) {
     return(Bs);
 }
 
-void Simplex(ProgramaLinear* PL, Base *Bs) { 
+Base *Simplex(ProgramaLinear* PL, Base *Bs, int fase) { 
 
     int m = PL->m; int n = PL->n; int o = -1; int l = 0;
     double *a_0 = Aloca_vetor(m); double *y = Aloca_vetor(m); double*r_N = Aloca_vetor(n - m); double *A_e = Aloca_vetor(m); double *a_e = Aloca_vetor(m);
+    double *c_b = Aloca_vetor(m);
     double **B = Aloca_Matriz(m, m); 
 
 
-    while(l < 20) { // Loop ate encontrar solucao otima ou ilimitada
-        printf("Iteracao %d da fase 2 do Simplex:\n", l + 1);
+    while(true) { // Loop ate encontrar solucao otima ou ilimitada
+        printf("Iteracao %d da fase %d do Simplex:\n", l + 1, fase);
         for(int i = 0; i < m; i++) {
             for(int j = 0; j < m; j++) {
                 B[i][j] = PL->A[i][Bs->ind_b[j]]; // Constroi a matriz base B
@@ -247,7 +249,6 @@ void Simplex(ProgramaLinear* PL, Base *Bs) {
         Imprime_matriz(B, m, m, "Matriz B:");
 
         double **B_t = Transpoe_Matriz(B, m, m);
-        double *c_b = Aloca_vetor(m);
 
         for(int i = 0; i < m; i++) {
             c_b[i] = PL->c[Bs->ind_b[i]]; // Determina vetor de custos basicos c_b
@@ -272,10 +273,16 @@ void Simplex(ProgramaLinear* PL, Base *Bs) {
 
         int e_idc = indice_minimo(r_N, (n - m));
         if(r_N[e_idc] >= 0) {
-            Imprime_vetor(a_0, m, "Solucao otima encontrada: ");
-            double f = Multiplica_vetores(a_0, c_b, m); 
-            printf("Valor otimo: %lf", f); // Se todos os custos reduzidos forem nao-negativos, solucao otima foi encontrada
-            break;
+            if(fase == 2) {
+                Imprime_vetor(a_0, m, "Solucao otima encontrada: ");
+                double f = Multiplica_vetores(a_0, c_b, m); 
+                printf("Valor otimo: %lf", f); // Se todos os custos reduzidos forem nao-negativos, solucao otima foi encontrada
+                break;
+            }
+            else {
+                printf("Solucao basica viavel encontrada na fase 1 do Simplex.\n");
+                return(Bs);
+            }
         }
         int e = Bs->ind_nb[e_idc]; 
         printf("Indice a entrar na base: %d \n", e);
@@ -308,8 +315,20 @@ void Simplex(ProgramaLinear* PL, Base *Bs) {
         l++;
 
     }
-    Libera_PL;
-    return;
+    Libera_PL(&PL);
+    Libera_vetor(&a_0);
+    Libera_vetor(&y);
+    Libera_vetor(&r_N);
+    Libera_vetor(&A_e);
+    Libera_vetor(&a_e);
+    Libera_vetor(&c_b);
+    Libera_Matriz(&B, m);
+    if(fase == 1) 
+    return(Bs);
+    else {
+        Libera_Base(&Bs);
+        return(NULL);
+    }
 }
 
 Base *Fase1(ProgramaLinear *pl) {
@@ -320,20 +339,22 @@ Base *Fase1(ProgramaLinear *pl) {
     
     ProgramaLinear *pl_fase1 = Aloca_PL(m, (n + m));
 
+
     printf("Inicia fase 1:\n");
 
    for(int i = 0; i < m; i++) {
        Bs_fase1->ind_b[i] = i;
    }
 
-   for(int j = 0; j < pl->n; j++) {
-    Bs_fase1->ind_nb[j] = j + pl->m;
+   for(int j = 0; j < n; j++) {
+    Bs_fase1->ind_nb[j] = j + m;
    }
 
-   pl_fase1->m = pl->m; pl_fase1->n = (pl->m + pl->n); pl_fase1->b = pl->b;
-   for(int j = 0; j < (pl->m + pl->n); j++) {
+   pl_fase1->b = pl->b;
+
+   for(int j = 0; j < (m + n); j++) {
         for(int i = 0; i < pl->m; i++ ) {
-            if(j < pl->m) {
+            if(j < m) {
                 if(i == j) {
                     pl_fase1->A[i][j] = 1;
                 } 
@@ -342,22 +363,35 @@ Base *Fase1(ProgramaLinear *pl) {
                 }
             }
             else {
-                pl_fase1->A[i][j] = pl->A[i][j - pl->m];
+                pl_fase1->A[i][j] = pl->A[i][(j - m)];
             }
         }
     }
+    Imprime_matriz(pl_fase1->A, pl_fase1->m, pl_fase1->n, "Matriz fase 1:");
 
-    for(int i = 0; i < pl->n; i++) {
-        pl_fase1->c[i] = 1; 
+    for(int i = 0; i < m + n; i++) {
+        if(i < m)
+            pl_fase1->c[i] = 1;
+        else
+        pl_fase1->c[i] = 0; 
     }
 
-    Base *Base_Simplex = Aloca_Base(m, n);
-    Base_Simplex = Simplex(pl_fase1, Bs_fase1);
+    Bs_fase1 = Simplex(pl_fase1, Bs_fase1, 1);
+
+    Base *Base_factivel = Aloca_Base(m, n);
+
+    for(int i = 0; i < m; i++) {
+        Base_factivel->ind_b[i] = (Bs_fase1->ind_b[i]) - m; //copia os indices basicos
+        }
+
+    for(int i = 0; i < (n - m); i++) {
+        Base_factivel->ind_nb[i] = (Bs_fase1->ind_nb[m + i]) - m; //primeiros m indices de n_b: variaveis/colunas artificiais
+    }
     
     Libera_Base(&Bs_fase1);
     Libera_PL(&pl_fase1);
 
-    return(Base_Simplex);
+    return(Base_factivel);
 
 }
 
@@ -392,42 +426,28 @@ int main() {
     }
 
     ProgramaLinear *pl = Aloca_PL(m, n);
+    pl->m = m; pl->n = n; pl->c = c; pl->b = b; pl->c = c; pl->A = A;
 
-    Base *B = Aloca_Base(m, n);
-    B->ind_b[0] = 0;
-    B->ind_b[1] = 2;
-    B->ind_nb[0] = 1;
-    B->ind_nb[1] = 3;
+    Base *Base_inicial = Aloca_Base(m, n);
 
-    if(B == NULL) {
+    Base_inicial = Fase1(pl);
+
+    if(Base_inicial == NULL) {
         printf("Nao foi possivel encontrar uma base viavel!\n");
         return(0);
     }
 
     printf("Base viavel encontrada pela Fase I:\n");
-    printf("Indices basicos:\n");
-    for(int i = 0; i < m; i++)
-        printf("%d ", B->ind_b[i]);
-
-    pl->m = m; pl->n = n; pl->c = c; pl->b = b; pl->c = c; pl->A = A;
-
-    Simplex(pl, B);
-
-    Libera_PL(&pl);
-
-    printf("Indices basicos encontrados:\n");
-    for(int i = 0; i < m; i++)
-        printf("%d\n", B->ind_b[i]);
-
-    x = Aloca_vetor(m);
-    for(int i = 0; i < m; i++) {
-        x[i] = 0;
-    }
     
 
+    for(int i = 0; i < m; i++)
+        printf("%d ", Base_inicial->ind_b[i]);
+    printf("\n");
+
+    Simplex(pl, Base_inicial, 2);
+    
     return(1);
     
-
 }
 
 
